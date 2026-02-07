@@ -1,0 +1,114 @@
+{
+  "name": "stripe_checkout_webhook_v1",
+  "nodes": [
+    {
+      "parameters": { "event": "all" },
+      "id": "StripeTrigger1",
+      "name": "Stripe Trigger",
+      "type": "n8n-nodes-base.stripeTrigger",
+      "typeVersion": 1,
+      "position": [220, 320],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "functionCode": "const evt = $json;\nconst type = evt.type;\nconst obj = evt.data?.object || {};\nconst paymentIntentId = obj.payment_intent || obj.id || obj.payment_intent_id;\nconst amount = (obj.amount_total ?? obj.amount ?? 0);\nconst currency = (obj.currency || obj.amount_received_currency || 'eur');\nconst email = obj.customer_details?.email || obj.receipt_email || obj.customer_email || null;\nlet status = obj.status || (type === 'payment_intent.succeeded' ? 'succeeded' : (type === 'payment_intent.payment_failed' ? 'failed' : 'pending'));\nreturn [{ type, paymentIntentId, amount, currency, email, status, raw: evt }];"
+      },
+      "id": "Function1",
+      "name": "normalize_event",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [500, 320]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "requestMethod": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/payments",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "apikey": "={{$env.SUPABASE_SERVICE_ROLE}}",
+            "Authorization": "={{`Bearer ${$env.SUPABASE_SERVICE_ROLE}`}}",
+            "Prefer": "resolution=merge-duplicates",
+            "Content-Type": "application/json"
+          }
+        },
+        "bodyParametersJson": "={\"stripe_payment_intent_id\": $json.paymentIntentId, \"amount\": $json.amount, \"currency\": $json.currency, \"status\": $json.status, \"provider\": \"stripe\"}"
+      },
+      "id": "HTTPRequest1",
+      "name": "upsert_payment_supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 320],
+      "credentials": { "httpBasicAuth": {} }
+    },
+    {
+      "parameters": {
+        "conditions": { "string": [ { "value1": "={{$json.status}}", "operation": "equals", "value2": "succeeded" } ] }
+      },
+      "id": "If1",
+      "name": "IF payment succeeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1040, 320]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "requestMethod": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/orders",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "apikey": "={{$env.SUPABASE_SERVICE_ROLE}}",
+            "Authorization": "={{`Bearer ${$env.SUPABASE_SERVICE_ROLE}`}}",
+            "Prefer": "resolution=merge-duplicates",
+            "Content-Type": "application/json"
+          }
+        },
+        "bodyParametersJson": "={\"correlation_id\": $json.paymentIntentId, \"status\": \"paid\"}"
+      },
+      "id": "HTTPRequest2",
+      "name": "upsert_order_supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1280, 240]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "requestMethod": "POST",
+        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/audit_log",
+        "jsonParameters": true,
+        "options": {
+          "headers": {
+            "apikey": "={{$env.SUPABASE_SERVICE_ROLE}}",
+            "Authorization": "={{`Bearer ${$env.SUPABASE_SERVICE_ROLE}`}}",
+            "Content-Type": "application/json"
+          }
+        },
+        "bodyParametersJson": "={\"event_type\": $json.type, \"payload\": $json.raw, \"source\": \"stripe_webhook\"}"
+      },
+      "id": "HTTPRequest3",
+      "name": "insert_audit_log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1280, 420]
+    }
+  ],
+  "connections": {
+    "Stripe Trigger": { "main": [ [ { "node": "normalize_event", "type": "main", "index": 0 } ] ] },
+    "normalize_event": { "main": [ [ { "node": "upsert_payment_supabase", "type": "main", "index": 0 } ] ] },
+    "upsert_payment_supabase": { "main": [ [ { "node": "IF payment succeeded?", "type": "main", "index": 0 } ] ] },
+    "IF payment succeeded?": {
+      "main": [
+        [ { "node": "upsert_order_supabase", "type": "main", "index": 0 } ],
+        [ { "node": "insert_audit_log", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "version": 2
+}

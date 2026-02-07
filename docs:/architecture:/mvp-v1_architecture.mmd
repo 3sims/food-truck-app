@@ -1,0 +1,44 @@
+flowchart LR
+    subgraph Client
+        U[Client Web<br/>Navigateur]
+    end
+    
+    subgraph Vercel[Frontend - Vercel / Next.js]
+        FE[Next.js App<br/>Pages: Accueil, Panier, Confirmation]
+        API1[/API: POST /api/orders/create-checkout-session/]
+    end
+    
+    subgraph Stripe[Stripe]
+        CO[Checkout Session]
+        PI[Payment Intent]
+        WH[Webhook Events]
+    end
+    
+    subgraph n8n[Automations - n8n]
+        W1[Workflow: stripe_checkout_webhook_v1<br/>idempotent upsert]
+    end
+    
+    subgraph Supabase[Supabase - Postgres + Auth]
+        DB[(DB: customers, menu_items, orders,<br/>order_items, payments, audit_log)]
+        RLS[RLS Policies]
+    end
+    
+    subgraph Backoffice[Back-office - Retool/Softr]
+        BO[Vue Commandes lecture]
+    end
+    
+    U -->|Sélection menu, panier| FE
+    FE -->|Créer Session Checkout| API1 --> CO
+    CO -->|Redirection paiement| U
+    WH -->|Événements| W1
+    W1 -->|Upsert: orders/payments| DB
+    DB -->|Lecture commandes| BO
+    RLS -. Protège l'accès .- DB
+    
+    classDef comp fill:#eef,stroke:#446;
+    classDef ext fill:#efe,stroke:#484;
+    class FE,API1 comp;
+    class CO,PI,WH ext;
+    class DB,RLS comp;
+    class W1 comp;
+    class BO comp;

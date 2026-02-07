@@ -1,0 +1,67 @@
+erDiagram
+  CUSTOMERS ||--o{ ORDERS : places
+  ORDERS ||--|{ ORDER_ITEMS : contains
+  ORDERS ||--o{ PAYMENTS : paid_by
+  MENU_ITEMS ||--o{ ORDER_ITEMS : ordered_as
+
+  CUSTOMERS {
+    uuid id PK
+    text email UK
+    text phone
+    text first_name
+    text last_name
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  MENU_ITEMS {
+    uuid id PK
+    text name
+    text description
+    integer price
+    text currency
+    text category
+    boolean available
+    text image_url
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  ORDERS {
+    uuid id PK
+    uuid customer_id FK
+    text correlation_id UK
+    text status
+    integer total_amount
+    text currency
+    text customer_email
+    text customer_phone
+    timestamptz pickup_time
+    text notes
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  ORDER_ITEMS {
+    uuid id PK
+    uuid order_id FK
+    uuid menu_item_id FK
+    text menu_item_name
+    integer quantity
+    integer unit_price
+    integer total_price
+    timestamptz created_at
+  }
+
+  PAYMENTS {
+    uuid id PK
+    uuid order_id FK
+    text provider
+    text stripe_payment_intent_id UK
+    integer amount
+    text currency
+    text status
+    jsonb metadata
+    timestamptz created_at
+    timestamptz updated_at
+  }
