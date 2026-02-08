@@ -1,0 +1,58 @@
+# Guide d'intégration Backend - Food Truck MVP
+
+## 🔑 Credentials Supabase
+
+### Environnement de test
+- **URL** : https://uxhymccilxfwltlvmlzc.supabase.co
+- **ANON KEY** : `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` (à partager via 1Password/LastPass)
+- **SERVICE ROLE KEY** : `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...` (⚠️ SECRET - uniquement côté serveur)
+
+---
+
+## 📊 Structure de la BDD
+
+### Table `orders`
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | UUID | Primary key |
+| `status` | TEXT | Valeurs : 'pending', 'paid', 'preparing', 'ready', 'delivered' |
+| `total_amount` | INTEGER | Montant total en centimes |
+| `items` | JSONB | Liste des produits commandés |
+| `correlation_id` | TEXT | ID du PaymentIntent Stripe (nullable) |
+| `created_at` | TIMESTAMP | Date de création |
+| `updated_at` | TIMESTAMP | Dernière mise à jour |
+
+### Table `payments`
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | UUID | Primary key |
+| `order_id` | UUID | Foreign key vers `orders.id` (nullable) |
+| `stripe_payment_intent_id` | TEXT | Unique |
+| `amount` | INTEGER | Montant en centimes |
+| `currency` | TEXT | Ex: 'eur', 'usd' |
+| `status` | TEXT | 'succeeded', 'failed', 'pending' |
+| `provider` | TEXT | Toujours 'stripe' |
+| `created_at` | TIMESTAMP | Date de création |
+
+### Table `audit_log`
+| Colonne | Type | Description |
+|---------|------|-------------|
+| `id` | UUID | Primary key |
+| `event_type` | TEXT | Ex: 'payment_intent.succeeded' |
+| `source` | TEXT | Toujours 'stripe_webhook' |
+| `entity_type` | TEXT | Toujours 'payment' |
+| `entity_id` | TEXT | PaymentIntent ID |
+| `payload` | JSONB | Événement Stripe complet |
+| `created_at` | TIMESTAMP | Date de réception |
+
+---
+
+## 🔗 Corrélation Commande ↔ Paiement
+
+### Comment ça fonctionne ?
+
+1. **Frontend crée une commande** :
+   ```typescript
+   POST /api/orders
+   Body: { items: [...], total: 2500 }
+   Response: { orderId: "abc-123" }

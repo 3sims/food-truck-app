@@ -1,44 +1,53 @@
-flowchart LR
-    subgraph Client
-        U[Client Web<br/>Navigateur]
-    end
-    
-    subgraph Vercel[Frontend - Vercel / Next.js]
-        FE[Next.js App<br/>Pages: Accueil, Panier, Confirmation]
-        API1[/API: POST /api/orders/create-checkout-session/]
-    end
-    
-    subgraph Stripe[Stripe]
-        CO[Checkout Session]
-        PI[Payment Intent]
-        WH[Webhook Events]
-    end
-    
-    subgraph n8n[Automations - n8n]
-        W1[Workflow: stripe_checkout_webhook_v1<br/>idempotent upsert]
-    end
-    
-    subgraph Supabase[Supabase - Postgres + Auth]
-        DB[(DB: customers, menu_items, orders,<br/>order_items, payments, audit_log)]
-        RLS[RLS Policies]
-    end
-    
-    subgraph Backoffice[Back-office - Retool/Softr]
-        BO[Vue Commandes lecture]
-    end
-    
-    U -->|Sélection menu, panier| FE
-    FE -->|Créer Session Checkout| API1 --> CO
-    CO -->|Redirection paiement| U
-    WH -->|Événements| W1
-    W1 -->|Upsert: orders/payments| DB
-    DB -->|Lecture commandes| BO
-    RLS -. Protège l'accès .- DB
-    
-    classDef comp fill:#eef,stroke:#446;
-    classDef ext fill:#efe,stroke:#484;
-    class FE,API1 comp;
-    class CO,PI,WH ext;
-    class DB,RLS comp;
-    class W1 comp;
-    class BO comp;
+%%{init: {"theme":"base","themeVariables":{
+  "fontFamily":"Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial",
+  "primaryTextColor":"#111827",
+  "lineColor":"#374151"
+}}}%%
+graph TB
+
+subgraph "FRONTEND - Rôle A"
+  A[Client Web Browser]
+  B[Next.js App<br/>Vercel]
+  C[Stripe Elements<br/>Payment Form]
+end
+
+subgraph "BACKEND - Rôle B"
+  D[(Supabase PostgreSQL)]
+  E[n8n Workflow<br/><a href="http://food-truck-app.n8n.cloud" target="_blank">food-truck-app.n8n.cloud</a>]
+  F[Stripe API<br/><a href="http://stripe.com" target="_blank">stripe.com</a>]
+end
+
+subgraph "Tables Supabase"
+  D1[orders]
+  D2[payments]
+  D3[audit_log]
+end
+
+A -->|1. Browse Menu| B
+A -->|2. Create Order| B
+B -->|3. POST /api/orders| D
+D -->|4. Insert| D1
+B -->|5. Create PaymentIntent<br/>metadata: order_id| F
+F -->|6. Return clientSecret| B
+B -->|7. Display| C
+C -->|8. Confirm Payment| F
+F -->|9. Webhook Event<br/>payment_intent.succeeded| E
+E -->|10. Normalize Data| E
+E -->|11. Upsert Payment| D2
+E -->|12. Insert Event| D3
+E -->|13. Update Order Status<br/>status = 'paid'| D1
+D1 -->|14. Status Update| B
+B -->|15. Display Success| A
+
+%% Styles (fonds clairs + texte sombre forcé)
+style A  fill:#e1f5ff,stroke:#2e5c8a,color:#111827
+style B  fill:#e1f5ff,stroke:#2e5c8a,color:#111827
+style C  fill:#e1f5ff,stroke:#2e5c8a,color:#111827
+
+style D  fill:#ffe1e1,stroke:#8a2e2e,color:#111827
+style E  fill:#ffe1e1,stroke:#8a2e2e,color:#111827
+style F  fill:#fff4e1,stroke:#9a6b16,color:#111827
+
+style D1 fill:#f0f0f0,stroke:#6b7280,color:#111827
+style D2 fill:#f0f0f0,stroke:#6b7280,color:#111827
+style D3 fill:#f0f0f0,stroke:#6b7280,color:#111827

@@ -2,113 +2,245 @@
   "name": "stripe_checkout_webhook_v1",
   "nodes": [
     {
-      "parameters": { "event": "all" },
-      "id": "StripeTrigger1",
-      "name": "Stripe Trigger",
-      "type": "n8n-nodes-base.stripeTrigger",
-      "typeVersion": 1,
-      "position": [220, 320],
-      "credentials": {}
-    },
-    {
       "parameters": {
-        "functionCode": "const evt = $json;\nconst type = evt.type;\nconst obj = evt.data?.object || {};\nconst paymentIntentId = obj.payment_intent || obj.id || obj.payment_intent_id;\nconst amount = (obj.amount_total ?? obj.amount ?? 0);\nconst currency = (obj.currency || obj.amount_received_currency || 'eur');\nconst email = obj.customer_details?.email || obj.receipt_email || obj.customer_email || null;\nlet status = obj.status || (type === 'payment_intent.succeeded' ? 'succeeded' : (type === 'payment_intent.payment_failed' ? 'failed' : 'pending'));\nreturn [{ type, paymentIntentId, amount, currency, email, status, raw: evt }];"
-      },
-      "id": "Function1",
-      "name": "normalize_event",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 2,
-      "position": [500, 320]
-    },
-    {
-      "parameters": {
+        "method": "PATCH",
+        "url": "https://uxhymccilxfwltlvmlzc.supabase.co/rest/v1/orders?correlation_id=eq.{{$json.paymentIntentId}}",
         "authentication": "predefinedCredentialType",
-        "requestMethod": "POST",
-        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/payments",
-        "jsonParameters": true,
-        "options": {
-          "headers": {
-            "apikey": "={{$env.SUPABASE_SERVICE_ROLE}}",
-            "Authorization": "={{`Bearer ${$env.SUPABASE_SERVICE_ROLE}`}}",
-            "Prefer": "resolution=merge-duplicates",
-            "Content-Type": "application/json"
-          }
+        "nodeCredentialType": "httpMultipleHeadersAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
         },
-        "bodyParametersJson": "={\"stripe_payment_intent_id\": $json.paymentIntentId, \"amount\": $json.amount, \"currency\": $json.currency, \"status\": $json.status, \"provider\": \"stripe\"}"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"status\": \"paid\" } }}",
+        "options": {}
       },
-      "id": "HTTPRequest1",
-      "name": "upsert_payment_supabase",
+      "id": "59c506c4-c2ad-444f-bdb3-d3ae86f88ac3",
+      "name": "update_order_status_paid",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [800, 320],
-      "credentials": { "httpBasicAuth": {} }
+      "position": [-560, 256],
+      "credentials": {
+        "httpMultipleHeadersAuth": {
+          "id": "NZ9RwFyB6Ulm6rIR",
+          "name": "Multiple Headers Auth account"
+        }
+      }
     },
     {
       "parameters": {
-        "conditions": { "string": [ { "value1": "={{$json.status}}", "operation": "equals", "value2": "succeeded" } ] }
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.status}}",
+              "operation": "equals",
+              "value2": "succeeded"
+            }
+          ]
+        },
+        "options": {}
       },
-      "id": "If1",
+      "id": "61c043af-cbd4-498b-bd25-08e4a1d3247e",
       "name": "IF payment succeeded?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1040, 320]
+      "position": [-784, 352]
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "https://uxhymccilxfwltlvmlzc.supabase.co/rest/v1/audit_log",
         "authentication": "predefinedCredentialType",
-        "requestMethod": "POST",
-        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/orders",
-        "jsonParameters": true,
-        "options": {
-          "headers": {
-            "apikey": "={{$env.SUPABASE_SERVICE_ROLE}}",
-            "Authorization": "={{`Bearer ${$env.SUPABASE_SERVICE_ROLE}`}}",
-            "Prefer": "resolution=merge-duplicates",
-            "Content-Type": "application/json"
-          }
-        },
-        "bodyParametersJson": "={\"correlation_id\": $json.paymentIntentId, \"status\": \"paid\"}"
+        "nodeCredentialType": "httpMultipleHeadersAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"event_type\": $json.type,\n  \"source\": \"stripe_webhook\",\n  \"entity_type\": \"payment\",\n  \"entity_id\": $json.paymentIntentId,\n  \"payload\": $json.raw\n} }}",
+        "options": {}
       },
-      "id": "HTTPRequest2",
-      "name": "upsert_order_supabase",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4,
-      "position": [1280, 240]
-    },
-    {
-      "parameters": {
-        "authentication": "predefinedCredentialType",
-        "requestMethod": "POST",
-        "url": "https://YOUR_PROJECT.supabase.co/rest/v1/audit_log",
-        "jsonParameters": true,
-        "options": {
-          "headers": {
-            "apikey": "={{$env.SUPABASE_SERVICE_ROLE}}",
-            "Authorization": "={{`Bearer ${$env.SUPABASE_SERVICE_ROLE}`}}",
-            "Content-Type": "application/json"
-          }
-        },
-        "bodyParametersJson": "={\"event_type\": $json.type, \"payload\": $json.raw, \"source\": \"stripe_webhook\"}"
-      },
-      "id": "HTTPRequest3",
+      "id": "99d0f790-d294-45ad-be14-d443e97962d5",
       "name": "insert_audit_log",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1280, 420]
+      "position": [-1008, 352],
+      "credentials": {
+        "httpMultipleHeadersAuth": {
+          "id": "NZ9RwFyB6Ulm6rIR",
+          "name": "Multiple Headers Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition"
+      },
+      "id": "merge-node-id-12345",
+      "name": "merge_payment_and_event",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [-1120, 352]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://uxhymccilxfwltlvmlzc.supabase.co/rest/v1/payments?on_conflict=stripe_payment_intent_id",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpMultipleHeadersAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"stripe_payment_intent_id\": $json.paymentIntentId,\n  \"amount\": $json.amount,\n  \"currency\": $json.currency,\n  \"status\": $json.status,\n  \"provider\": \"stripe\"\n} }}",
+        "options": {}
+      },
+      "id": "bbbb365b-fbc5-4043-b2ad-528075e22c93",
+      "name": "upsert_payment_supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [-1232, 256],
+      "credentials": {
+        "httpMultipleHeadersAuth": {
+          "id": "NZ9RwFyB6Ulm6rIR",
+          "name": "Multiple Headers Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const evt = $input.first().json;\nconst type = evt.type;\nconst obj = evt.data?.object || {};\nconst paymentIntentId = obj.payment_intent || obj.id || obj.payment_intent_id;\nconst amount = (obj.amount_total ?? obj.amount ?? 0);\nconst currency = (obj.currency || obj.amount_received_currency || 'eur');\nconst email = obj.customer_details?.email || obj.receipt_email || obj.customer_email || null;\nlet status = obj.status || (type === 'payment_intent.succeeded' ? 'succeeded' : (type === 'payment_intent.payment_failed' ? 'failed' : 'pending'));\nreturn [{ json: { type, paymentIntentId, amount, currency, email, status, raw: evt } }];"
+      },
+      "id": "a4c4ddb7-d1c3-4432-8a68-4617485a4c3f",
+      "name": "normalize_event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1440, 352]
+    },
+    {
+      "parameters": {
+        "events": [
+          "invoice.payment_succeeded",
+          "invoice.payment_failed",
+          "checkout.session.completed",
+          "payment_intent.succeeded",
+          "payment_intent.payment_failed"
+        ]
+      },
+      "id": "b0b9dee6-46ec-49fd-bff1-7e699c2dde04",
+      "name": "Stripe Trigger",
+      "type": "n8n-nodes-base.stripeTrigger",
+      "typeVersion": 1,
+      "position": [-1664, 352],
+      "webhookId": "a3679df1-ca2a-47e6-9cce-53d98b99ba47",
+      "credentials": {
+        "stripeApi": {
+          "id": "2rSTVVfHdgYjKIP6",
+          "name": "Stripe account"
+        }
+      }
     }
   ],
+  "pinData": {},
   "connections": {
-    "Stripe Trigger": { "main": [ [ { "node": "normalize_event", "type": "main", "index": 0 } ] ] },
-    "normalize_event": { "main": [ [ { "node": "upsert_payment_supabase", "type": "main", "index": 0 } ] ] },
-    "upsert_payment_supabase": { "main": [ [ { "node": "IF payment succeeded?", "type": "main", "index": 0 } ] ] },
+    "Stripe Trigger": {
+      "main": [
+        [
+          {
+            "node": "normalize_event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "normalize_event": {
+      "main": [
+        [
+          {
+            "node": "upsert_payment_supabase",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "merge_payment_and_event",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "upsert_payment_supabase": {
+      "main": [
+        [
+          {
+            "node": "merge_payment_and_event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "merge_payment_and_event": {
+      "main": [
+        [
+          {
+            "node": "insert_audit_log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "IF payment succeeded?": {
       "main": [
-        [ { "node": "upsert_order_supabase", "type": "main", "index": 0 } ],
-        [ { "node": "insert_audit_log", "type": "main", "index": 0 } ]
+        [
+          {
+            "node": "update_order_status_paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "insert_audit_log": {
+      "main": [
+        [
+          {
+            "node": "IF payment succeeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
-  "active": false,
-  "settings": {},
-  "version": 2
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "55ec4e0a-6289-46d5-80d0-1c4245a5eb0f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "68bf2354ac507a5ef348f411a41d7891d778ecbcdc879fc36ef276ae1f222f6d"
+  },
+  "id": "1pfdFOpRaYDvBLyg8CtfU",
+  "tags": []
 }
