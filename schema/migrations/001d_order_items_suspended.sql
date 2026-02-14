@@ -3,9 +3,22 @@
 -- Owner: Rôle B
 
 -- Add flag to mark items as "suspended meal" (paid by someone else)
-ALTER TABLE order_items ADD COLUMN IF NOT EXISTS is_suspended boolean DEFAULT false;
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'order_items' 
+        AND column_name = 'is_suspended'
+    ) THEN
+        ALTER TABLE order_items ADD COLUMN is_suspended boolean DEFAULT false;
+    END IF;
+END $$;
 
 -- Index for queries filtering suspended items
-CREATE INDEX IF NOT EXISTS idx_order_items_suspended ON order_items(is_suspended) WHERE is_suspended = true;
+CREATE INDEX IF NOT EXISTS idx_order_items_suspended 
+ON order_items(is_suspended) 
+WHERE is_suspended = true;
 
+-- Add comment
 COMMENT ON COLUMN order_items.is_suspended IS 'True si ce repas est un repas suspendu (offert par un tiers)';
