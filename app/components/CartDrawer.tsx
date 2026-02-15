@@ -14,6 +14,11 @@ interface CartDrawerProps {
   onToggleDonation: (id: string) => void;
   onRemove: (id: string) => void;
   onCheckout: () => void;
+  user?: any;  // ✅ AJOUTER
+  guestEmail: string;  // ✅ AJOUTER
+  guestPhone: string;  // ✅ AJOUTER
+  onSetGuestEmail: (email: string) => void;  // ✅ AJOUTER
+  onSetGuestPhone: (phone: string) => void;  // ✅ AJOUTER
 }
 
 export function CartDrawer({
@@ -26,7 +31,12 @@ export function CartDrawer({
   onUpdateQuantity,
   onToggleDonation,
   onRemove,
-  onCheckout
+  onCheckout,
+  user,
+  guestEmail,
+  guestPhone,
+  onSetGuestEmail,
+  onSetGuestPhone
 }: CartDrawerProps) {
   const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const donationTotal = items
@@ -164,6 +174,42 @@ export function CartDrawer({
                   <span>{finalTotal.toFixed(2)}€</span>
                 </div>
               </div>
+
+
+              {/* Formulaire guest checkout si pas connecté */}
+              {!user && (
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="votre@email.com"
+                      value={guestEmail}
+                      onChange={(e) => onSetGuestEmail(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Téléphone *
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="+33 6 12 34 56 78"
+                      value={guestPhone}
+                      onChange={(e) => onSetGuestPhone(e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    📱 Vous recevrez votre code de retrait par SMS et email
+                  </p>
+                </div>
+              )}
 
               {/* Checkout Button */}
               <button

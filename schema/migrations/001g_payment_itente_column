@@ -1,0 +1,12 @@
+-- Ajouter la colonne stripe_payment_intent_id à la table orders
+ALTER TABLE orders 
+ADD COLUMN IF NOT EXISTS stripe_payment_intent_id text;
+
+-- Créer un index pour les performances
+CREATE INDEX IF NOT EXISTS idx_orders_stripe_payment_intent 
+ON orders(stripe_payment_intent_id);
+
+-- Ajouter une contrainte unique (optionnel mais recommandé)
+ALTER TABLE orders 
+ADD CONSTRAINT orders_stripe_payment_intent_id_unique 
+UNIQUE (stripe_payment_intent_id);

@@ -2,11 +2,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "./_shared/cors.ts";
 import { handleSettings } from "./routes/settings.ts";
+import { handleMenuItems } from "./routes/menu-items.ts";
 import { handleOrders } from "./routes/orders.ts";
 import { handleStock } from "./routes/stock.ts";
 import { handleClaimSuspended } from "./routes/claim-suspended.ts";
 import { handleLogout } from "./routes/logout.ts";
 import { handleBootstrap } from "./routes/bootstrap.ts";
+import { handleFoodTrucks } from "./routes/food-trucks.ts";
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -37,6 +39,12 @@ serve(async (req) => {
       
       case "/bootstrap":
         return await handleBootstrap(req);
+
+      case "/menu-items":
+        return await handleMenuItems(req, supabase);
+
+      case "/food-trucks":
+        return await handleFoodTrucks(req, supabase);
       
       default:
         return new Response(

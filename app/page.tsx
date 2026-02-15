@@ -16,7 +16,6 @@ import { ProfilePage } from './components/ProfilePage';
 import { StatsView } from './components/StatsView';
 import { AuthModal } from './components/AuthModal';
 import { Footer } from './components/Footer';
-import { MENU_ITEMS as INITIAL_MENU_ITEMS } from './lib/mockData';
 import { MenuItem, Category, OrderItem, Order } from './lib/types';
 import { Search, MapPin, Clock, Loader2 } from 'lucide-react';
 import { projectId, publicAnonKey } from './utils/supabase/info';
@@ -54,16 +53,82 @@ export default function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isComfortMode, setIsComfortMode] = useState(false);
   const [loading, setLoading] = useState(true);
-
+  const [rawMenuItems, setRawMenuItems] = useState<MenuItem[]>([]);
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [userLocation, setUserLocation] = useState<{ lat: number; lon: number } | null>(null);
+  const [nearestTrucks, setNearestTrucks] = useState<any[]>([]);
+  
   const categories: Category[] = ['Burgers', 'Tacos', 'Sides', 'Drinks'];
 
+  const fetchMenuItems = async () => {
+    try {
+      const res = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-9b4dbeda/menu-items`, {
+        headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+      });
+      const items = await res.json();
+      setRawMenuItems(items.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        price: item.price / 100,
+        category: item.category,
+        image: item.image_url,
+        stock: item.stock_quantity,
+        allergens: item.allergens?.split(',') || []
+      })));
+    } catch (error) {
+      console.error('Error fetching menu items:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchMenuItems();
+  }, []);
+
   // Computed Menu Items with real stock
-  const menuItems = useMemo(() => {
-    return INITIAL_MENU_ITEMS.map(item => ({
+  const menuItems: MenuItem[] = useMemo(() => {
+    return rawMenuItems.map((item: MenuItem) => ({
       ...item,
       stock: stock[item.id] !== undefined ? stock[item.id] : item.stock
     }));
-  }, [stock]);
+  }, [rawMenuItems, stock]);
+
+  const getUserLocation = () => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          setUserLocation({ lat: latitude, lon: longitude });
+          
+          try {
+            const res = await fetch(
+              `https://${projectId}.supabase.co/functions/v1/make-server-9b4dbeda/food-trucks?lat=${latitude}&lon=${longitude}&maxDistance=10`,
+              { headers: { 'Authorization': `Bearer ${publicAnonKey}` } }
+            );
+            const trucks = await res.json();
+            setNearestTrucks(trucks);
+            
+            if (trucks.length > 0) {
+              setLocation(trucks[0].address);
+              toast.success(`Food truck trouvé à ${trucks[0].distance_km} km`);
+            } else {
+              toast.info('Aucun food truck à proximité');
+            }
+          } catch (error) {
+            console.error('Error fetching food trucks:', error);
+            toast.error('Erreur lors de la recherche de food trucks');
+          }
+        },
+        (error) => {
+          console.error('Geolocation error:', error);
+          toast.error('Impossible de vous géolocaliser');
+        }
+      );
+    } else {
+      toast.error('Géolocalisation non disponible');
+    }
+  };
 
   // Fetch initial data
   const fetchData = async () => {
@@ -164,9 +229,11 @@ export default function App() {
   };
 
   const handleCheckout = async () => {
-    if (!user) {
-      setIsAuthOpen(true);
-      toast.info('Veuillez vous connecter pour commander.');
+    const email = user?.email || guestEmail;
+    const phone = user?.user_metadata?.phone || guestPhone;
+
+    if (!email || !phone) {
+      toast.error('Email et téléphone requis pour la commande');
       return;
     }
 
@@ -175,40 +242,47 @@ export default function App() {
       return;
     }
 
+    if (cartItems.length === 0) {
+      toast.error('Votre panier est vide');
+      return;
+    }
+
     try {
-      const res = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-9b4dbeda/orders`, {
+      const res = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-9b4dbeda/create-checkout`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${publicAnonKey}`
         },
         body: JSON.stringify({
-          items: cartItems,
-          pickupSlot: selectedSlot,
-          customerName: user.user_metadata?.name || user.email,
-          customerPhone: user.user_metadata?.phone
+          items: cartItems.map(item => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            isDonation: item.isDonation || false
+          })),
+          email,
+          phone,
+          pickupSlot: selectedSlot
         }),
       });
 
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
-
-      setOrders(prev => [data, ...prev]);
-      setCurrentOrder(data);
-      setCartItems([]);
-      setSelectedSlot('');
-      setIsCartOpen(false);
-      setView('confirmation');
       
-      // Refresh stock after order
-      const stockRes = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-9b4dbeda/stock`, {
-        headers: { 'Authorization': `Bearer ${publicAnonKey}` }
-      });
-      setStock(await stockRes.json());
+      if (data.error) {
+        throw new Error(data.error);
+      }
 
-      toast.success('Commande validée !');
+      if (!data.checkout_url) {
+        throw new Error('URL de paiement manquante');
+      }
+
+      toast.success('Redirection vers le paiement...');
+      window.location.href = data.checkout_url;
+
     } catch (err: any) {
-      toast.error(err.message);
+      console.error('Checkout error:', err);
+      toast.error(err.message || 'Erreur lors de la commande');
     }
   };
 
@@ -329,6 +403,11 @@ export default function App() {
         onToggleDonation={toggleDonation}
         onRemove={removeFromCart}
         onCheckout={handleCheckout}
+        user={user}
+        guestEmail={guestEmail}
+        guestPhone={guestPhone}
+        onSetGuestEmail={setGuestEmail}
+        onSetGuestPhone={setGuestPhone}
       />
 
       <ItemDetailModal 
@@ -344,6 +423,30 @@ export default function App() {
       />
 
       <Footer />
+
+      {/* Bouton géolocalisation - CORRECTEMENT PLACÉ */}
+      <button
+        onClick={getUserLocation}
+        className="fixed bottom-20 right-4 z-50 bg-orange-600 text-white p-4 rounded-full shadow-lg hover:bg-orange-700 transition-all hover:scale-110"
+        aria-label="Géolocaliser les food trucks"
+      >
+        <MapPin className="w-6 h-6" />
+      </button>
+
+      {/* Liste food trucks proches */}
+      {nearestTrucks.length > 0 && (
+        <div className="fixed bottom-32 right-4 z-40 bg-white p-4 rounded-lg shadow-xl max-w-xs border border-gray-200">
+          <h3 className="font-bold text-sm mb-2">Food trucks à proximité :</h3>
+          <ul className="space-y-1 text-xs">
+            {nearestTrucks.map((truck) => (
+              <li key={truck.id} className="flex justify-between items-center py-1">
+                <span className="font-medium">{truck.name}</span>
+                <span className="text-gray-500 bg-orange-50 px-2 py-0.5 rounded">{truck.distance_km} km</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
