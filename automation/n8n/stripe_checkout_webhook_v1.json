@@ -8,33 +8,43 @@
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "webhook",
+      "id": "bc6461ed-4797-4b72-ae99-a925cc862702",
       "name": "Webhook Stripe",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-1440, 3168],
+      "position": [
+        6720,
+        2912
+      ],
       "webhookId": "a3679df1-ca2a-47e6-9cce-53d98b99ba47"
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={ \"received\": true }"
+        "responseBody": "={ \"received\": true }",
+        "options": {}
       },
-      "id": "respond",
+      "id": "57240980-c49a-4208-bdf8-8744d07057ed",
       "name": "Respond 200 OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [-1216, 3040]
+      "position": [
+        6944,
+        2784
+      ]
     },
     {
       "parameters": {
         "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst type = body.type;\nconst obj = body.data?.object || {};\n\nconsole.log('📥 Webhook type:', type);\n\nlet sessionId = null;\nlet paymentIntentId = null;\nlet orderId = null;\n\nif (type === 'checkout.session.completed') {\n  sessionId = obj.id;\n  paymentIntentId = obj.payment_intent;\n  orderId = obj.metadata?.order_id;\n} else if (type === 'payment_intent.succeeded') {\n  paymentIntentId = obj.id;\n  orderId = obj.metadata?.order_id;\n}\n\nconst amount = obj.amount_total || obj.amount || 0;\n\nlet email = null;\nlet phone = null;\n\nif (obj.customer_details) {\n  email = obj.customer_details.email;\n  phone = obj.customer_details.phone;\n}\n\nif (obj.metadata) {\n  email = email || obj.metadata.customer_email;\n  phone = phone || obj.metadata.customer_phone;\n  orderId = orderId || obj.metadata.order_id;\n}\n\nemail = email || obj.receipt_email;\nconst pickupSlot = obj.metadata?.pickup_slot || null;\n\nlet items = [];\ntry {\n  if (obj.metadata?.items) items = JSON.parse(obj.metadata.items);\n} catch (e) {}\n\nlet status = obj.status;\nif (type === 'checkout.session.completed') status = 'succeeded';\nif (type === 'payment_intent.succeeded') status = 'succeeded';\nif (type === 'payment_intent.payment_failed') status = 'failed';\n\nconsole.log('✅ Extracted:', { type, sessionId, paymentIntentId, orderId });\n\nreturn [{ json: { type, sessionId, paymentIntentId, orderId, amount, currency: obj.currency || 'eur', email, phone, pickupSlot, items, status, raw: body } }];"
       },
-      "id": "extract",
+      "id": "698670b1-81f8-4705-b2f5-79e8adf80d20",
       "name": "Extract Payment Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-1216, 3168]
+      "position": [
+        6944,
+        2912
+      ]
     },
     {
       "parameters": {
@@ -66,11 +76,14 @@
         "jsonBody": "={\n  \"stripe_payment_intent_id\": \"{{ $json.paymentIntentId || $json.sessionId }}\",\n  \"amount\": {{ $json.amount }},\n  \"currency\": \"{{ $json.currency }}\",\n  \"status\": \"{{ $json.status }}\",\n  \"provider\": \"stripe\"\n}",
         "options": {}
       },
-      "id": "upsert",
+      "id": "688c077c-8378-42ac-a198-7c1e2816aa43",
       "name": "Upsert Payment",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-992, 3072]
+      "position": [
+        7168,
+        2816
+      ]
     },
     {
       "parameters": {
@@ -78,11 +91,14 @@
         "combineBy": "combineByPosition",
         "options": {}
       },
-      "id": "merge",
+      "id": "853b8f97-4327-4887-99fe-d76e7f963385",
       "name": "Merge Data",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [-768, 3168]
+      "position": [
+        7392,
+        2912
+      ]
     },
     {
       "parameters": {
@@ -114,21 +130,27 @@
         "jsonBody": "={\n  \"event_type\": \"{{ $json.type }}\",\n  \"source\": \"stripe_webhook\",\n  \"entity_type\": \"payment\",\n  \"entity_id\": \"{{ $json.paymentIntentId || $json.sessionId }}\",\n  \"payload\": {{ JSON.stringify($json.raw) }}\n}",
         "options": {}
       },
-      "id": "audit",
+      "id": "711563fe-c224-4d6c-9678-194969681bc7",
       "name": "Insert Audit Log",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-560, 3168]
+      "position": [
+        7600,
+        2912
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const auditLog = $input.first().json;\n\nlet orderId = null;\nlet sessionId = null;\nlet paymentIntentId = null;\nlet type = null;\nlet status = null;\n\nif (auditLog.payload) {\n  const payload = typeof auditLog.payload === 'string' ? JSON.parse(auditLog.payload) : auditLog.payload;\n  type = payload.type;\n  const obj = payload.data?.object || {};\n  \n  if (type === 'checkout.session.completed') {\n    sessionId = obj.id;\n    paymentIntentId = obj.payment_intent;\n    orderId = obj.metadata?.order_id;\n  } else if (type === 'payment_intent.succeeded') {\n    paymentIntentId = obj.id;\n    orderId = obj.metadata?.order_id;\n  }\n  \n  status = obj.status || 'unknown';\n}\n\nconsole.log('📦 Extracted from audit:', { type, orderId, sessionId, paymentIntentId, status });\n\nreturn [{ json: { type, orderId, sessionId, paymentIntentId, status } }];"
+        "jsCode": "const auditLog = $input.first().json;\n\nlet orderId = null;\nlet sessionId = null;\nlet paymentIntentId = null;\nlet type = null;\nlet status = null;\n\nif (auditLog.payload) {\n  const payload = typeof auditLog.payload === 'string' ? JSON.parse(auditLog.payload) : auditLog.payload;\n  type = payload.type;\n  const obj = payload.data?.object || {};\n  \n  if (type === 'checkout.session.completed') {\n    sessionId = obj.id;\n    paymentIntentId = obj.payment_intent;\n    orderId = obj.metadata?.order_id;\n    status = obj.payment_status;  // ← CHANGEMENT ICI (au lieu de obj.status)\n  } else if (type === 'payment_intent.succeeded') {\n    paymentIntentId = obj.id;\n    orderId = obj.metadata?.order_id;\n    status = obj.status;\n  }\n  \n  // Normaliser le status\n  if (status === 'paid' || status === 'complete') {\n    status = 'succeeded';\n  }\n}\n\nconsole.log('📦 Extracted from audit:', { type, orderId, sessionId, paymentIntentId, status });\n\nreturn [{ json: { type, orderId, sessionId, paymentIntentId, status } }];"
       },
-      "id": "extract-from-audit",
+      "id": "d8f952f3-68f8-4aec-9bd4-7c271f2d081d",
       "name": "Extract Order ID from Audit",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-336, 3168]
+      "position": [
+        7824,
+        2912
+      ]
     },
     {
       "parameters": {
@@ -136,9 +158,9 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 1
           },
-          "combinator": "and",
           "conditions": [
             {
               "id": "check-status",
@@ -157,26 +179,43 @@
                 "type": "string",
                 "operation": "notEquals"
               }
+            },
+            {
+              "id": "5ef35f13-e10f-456c-894f-f25cfe4f952b",
+              "leftValue": "={{ $json.type }}",
+              "rightValue": "checkout.session.completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
             }
-          ]
+          ],
+          "combinator": "and"
         },
         "options": {}
       },
-      "id": "if-has-orderid",
+      "id": "286c054f-3c5e-474c-b13f-d221fb0cb920",
       "name": "IF Has Order ID",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [-112, 3168]
+      "position": [
+        8048,
+        2912
+      ]
     },
     {
       "parameters": {
         "jsCode": "const data = $input.first().json;\nconst orderId = data.orderId;\n\nif (!orderId) {\n  console.error('❌ No orderId!');\n  return [];\n}\n\nconsole.log('⏳ Waiting 5s for order creation. OrderId:', orderId);\nawait new Promise(resolve => setTimeout(resolve, 5000));\nconsole.log('✅ Wait complete. Searching for order...');\n\nreturn [{ json: { orderId } }];"
       },
-      "id": "wait-node",
+      "id": "b448eae8-8d15-4e9d-8803-f0c8d5186e2c",
       "name": "Wait 5s",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [112, 3040]
+      "position": [
+        8272,
+        2784
+      ]
     },
     {
       "parameters": {
@@ -196,21 +235,27 @@
         },
         "options": {}
       },
-      "id": "find",
+      "id": "d62cdc8d-93e8-4429-941b-c4664f00a237",
       "name": "Find Order by ID",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [336, 3040]
+      "position": [
+        8496,
+        2784
+      ]
     },
     {
       "parameters": {
         "jsCode": "const response = $input.first().json;\n\nconsole.log('🔍 Find Order response:', JSON.stringify(response).substring(0, 200));\n\nif (!response || (Array.isArray(response) && response.length === 0)) {\n  console.error('❌ No order found in database');\n  return [];\n}\n\nconst order = Array.isArray(response) ? response[0] : response;\n\nif (!order || !order.id) {\n  console.error('❌ Invalid order structure');\n  return [];\n}\n\nconsole.log('✅ Order found:', order.id, '| Pickup code:', order.pickup_code, '| Status:', order.status);\nreturn [{ json: order }];"
       },
-      "id": "extract-order",
+      "id": "ec347403-00cc-4b13-90f4-0885d0742bc4",
       "name": "Extract Order",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [560, 3040]
+      "position": [
+        8720,
+        2784
+      ]
     },
     {
       "parameters": {
@@ -242,21 +287,27 @@
         "jsonBody": "={\n  \"status\": \"paid\"\n}",
         "options": {}
       },
-      "id": "update",
+      "id": "4f408db7-5456-4ea8-b29c-a293ac09e133",
       "name": "Update Order Status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [784, 3040]
+      "position": [
+        8944,
+        2784
+      ]
     },
     {
       "parameters": {
-        "jsCode": "const order = $input.first().json[0] || $input.first().json;\n\nif (!order) {\n  console.error('❌ No order in Format SMS input');\n  return [];\n}\n\nconst phone = order.customer_phone;\nconst email = order.customer_email;\nconst pickupCode = order.pickup_code || 'N/A';\nconst pickupTime = order.pickup_time ? new Date(order.pickup_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'N/A';\nconst totalAmount = order.total_amount || 0;\n\nconst smsMessage = `🍔 Commande confirmée !\\n\\nCode : ${pickupCode}\\nHeure : ${pickupTime}\\nLieu : Place de la Bastille\\n\\nMontant : ${(totalAmount / 100).toFixed(2)}€\\n\\nMontrez ce SMS au food truck.`;\n\nconsole.log('📱 SMS prepared | Phone:', phone, '| Code:', pickupCode);\n\nreturn [{ json: { phone, email, smsMessage, pickupCode, pickupTime, totalAmount, orderId: order.id } }];"
+        "jsCode": "const order = $input.first().json[0] || $input.first().json;\n\nif (!order) {\n  console.error('❌ No order in Format SMS input');\n  return [];\n}\n\n// Normaliser le numéro de téléphone (retirer les espaces)\nlet phone = order.customer_phone;\nif (phone) {\n  phone = phone.replace(/\\s+/g, '');  // Retirer tous les espaces\n}\n\nconst email = order.customer_email;\nconst pickupCode = order.pickup_code || 'N/A';\nconst pickupTime = order.pickup_time ? new Date(order.pickup_time).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'N/A';\nconst totalAmount = order.total_amount || 0;\n\nconst smsMessage = `🍔 Commande confirmée !\n\nCode : ${pickupCode}\nHeure : ${pickupTime}\nLieu : Place de la Bastille\n\nMontant : ${(totalAmount / 100).toFixed(2)}€\n\nMontrez ce SMS au food truck.`;\n\nconsole.log('📱 SMS prepared | Phone:', phone, '| Code:', pickupCode);\n\nreturn [{ json: { phone, email, smsMessage, pickupCode, pickupTime, totalAmount, orderId: order.id } }];"
       },
-      "id": "format-sms",
+      "id": "ca7461dc-5fbc-479e-93b1-93ed9bec30e1",
       "name": "Format SMS",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1008, 3040]
+      "position": [
+        9168,
+        2784
+      ]
     },
     {
       "parameters": {
@@ -284,11 +335,14 @@
         },
         "options": {}
       },
-      "id": "send-sms",
+      "id": "8cca0379-7565-4aa3-9515-385795695e1e",
       "name": "Send SMS",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1232, 3040],
+      "position": [
+        9392,
+        2784
+      ],
       "credentials": {
         "httpBasicAuth": {
           "id": "1eBOecciL4Upo0B9",
@@ -297,7 +351,6 @@
       }
     }
   ],
-  "pinData": {},
   "connections": {
     "Webhook Stripe": {
       "main": [
@@ -383,7 +436,8 @@
             "type": "main",
             "index": 0
           }
-        ]
+        ],
+        []
       ]
     },
     "Wait 5s": {
@@ -442,17 +496,15 @@
       ]
     }
   },
-  "active": true,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "final-corrected-with-extract-node",
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 1,
   "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "68bf2354ac507a5ef348f411a41d7891d778ecbcdc879fc36ef276ae1f222f6d"
-  },
-  "id": "1pfdFOpRaYDvBLyg8CtfU",
-  "tags": []
+    "templateCredsSetupCompleted": true
+  }
 }
